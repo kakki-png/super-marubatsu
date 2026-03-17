@@ -9,6 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
     <style>
+        /* CSSは以前の「復活・完全版」と同じです */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: -apple-system, sans-serif;
@@ -16,8 +17,6 @@
             background-color: #f8f9fa; margin: 0; min-height: 100vh;
             touch-action: manipulation; overflow: hidden;
         }
-
-        /* メニュー画面の設定 */
         #menu-screen {
             display: flex; flex-direction: column; align-items: center; gap: 20px;
             z-index: 10; background: #f8f9fa; width: 100%; height: 100%; position: absolute; justify-content: center;
@@ -29,38 +28,27 @@
             background: #1976d2; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .menu-btn.secondary { background: #4caf50; }
-
-        /* ゲーム画面の設定 */
         #game-screen { display: none; flex-direction: column; align-items: center; width: 100%; }
-        
-        #status {
-            font-size: 18px; font-weight: bold; margin: 15px 0;
-            height: 24px; color: #333; text-align: center;
-        }
-
+        #status { font-size: 18px; font-weight: bold; margin: 15px 0; height: 24px; color: #333; text-align: center; }
         #ultimate-board {
             display: grid; grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr); gap: 6px;
             background-color: #444; padding: 6px; border-radius: 8px;
             width: 92vw; max-width: 400px; aspect-ratio: 1 / 1;
         }
-
         .big-cell {
             display: grid; grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr); gap: 2px;
             background-color: #fff; position: relative;
         }
-
         .active-board {
             background-color: #fffde7 !important;
             box-shadow: inset 0 0 0 3px #fdd835; z-index: 1;
         }
-
         .small-cell {
             background-color: #fff; display: flex; align-items: center; justify-content: center;
             font-size: min(5vw, 20px); font-weight: bold; cursor: pointer; border: 1px solid #f0f0f0;
         }
-
         .won-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
@@ -69,19 +57,15 @@
         }
         .won-overlay.O { color: #1976d2; }
         .won-overlay.X { color: #d32f2f; }
-
         .controls { margin-top: 25px; display: flex; gap: 15px; }
-        .btn-small {
-            padding: 10px 20px; font-size: 14px; cursor: pointer;
-            border-radius: 20px; border: 1px solid #ccc; background: white;
-        }
+        .btn-small { padding: 10px 20px; font-size: 14px; cursor: pointer; border-radius: 20px; border: 1px solid #ccc; background: white; }
     </style>
 </head>
 <body>
 
     <div id="menu-screen">
         <h1>スーパーまるばつ</h1>
-        <button class="menu-btn" onclick="startGame('PvE')">AIと対戦</button>
+        <button class="menu-btn" onclick="startGame('PvE')">AIと対戦 (強化版)</button>
         <button class="menu-btn secondary" onclick="startGame('PvP')">二人で対戦</button>
     </div>
 
@@ -96,7 +80,11 @@
 
     <script>
         const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-        const PREFERENCE_ORDER = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+        // AIの評価用スコア
+        const SCORE_BIG_WIN = 1000;
+        const SCORE_SMALL_WIN = 100;
+        const SCORE_PREFERENCE = [4, 0, 2, 6, 8, 1, 3, 5, 7]; // 中央、隅、辺の順
+
         let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode;
 
         function startGame(mode) {
@@ -124,14 +112,12 @@
         function renderBoard() {
             const boardElement = document.getElementById('ultimate-board');
             boardElement.innerHTML = '';
-
             for (let i = 0; i < 9; i++) {
                 const bigCell = document.createElement('div');
                 bigCell.className = 'big-cell';
                 if (!gameOver && (activeBigBoardIndex === -1 || activeBigBoardIndex === i) && bigBoard[i] === null) {
                     bigCell.classList.add('active-board');
                 }
-
                 for (let j = 0; j < 9; j++) {
                     const smallCell = document.createElement('div');
                     smallCell.className = 'small-cell';
@@ -139,7 +125,6 @@
                     smallCell.onclick = () => handleMove(i, j);
                     bigCell.appendChild(smallCell);
                 }
-
                 if (bigBoard[i]) {
                     const overlay = document.createElement('div');
                     overlay.className = `won-overlay ${bigBoard[i]}`;
@@ -153,10 +138,11 @@
         function handleMove(bigIndex, smallIndex) {
             if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
             if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
-
             executeMove(bigIndex, smallIndex);
             if (!gameOver && gameMode === 'PvE' && currentPlayer === 'X') {
-                setTimeout(aiSmartMove, 500);
+                document.getElementById('status').textContent = 'AIが思考中...';
+                // 思考時間を少し設けてからAIの手を実行
+                setTimeout(aiMinimaxMove, 300);
             }
         }
 
@@ -167,48 +153,145 @@
             } else if (!smallBoards[bigIndex].includes(null)) {
                 bigBoard[bigIndex] = 'Draw';
             }
-
             if (checkWin(bigBoard, currentPlayer)) {
                 gameOver = true;
                 renderBoard();
                 document.getElementById('status').textContent = `🏆 ${currentPlayer} の勝利！`;
                 return;
             }
-
             activeBigBoardIndex = (bigBoard[smallIndex] === null) ? smallIndex : -1;
             currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
             updateStatus();
             renderBoard();
         }
 
-        function aiSmartMove() {
-            const possibleMoves = [];
-            const searchIndices = activeBigBoardIndex === -1 
-                ? bigBoard.map((v, i) => v === null ? i : null).filter(v => v !== null)
-                : [activeBigBoardIndex];
+        // --- 強化版AI: 2手読みミニマックス法 ---
 
-            for (let bIdx of searchIndices) {
-                for (let sIdx = 0; sIdx < 9; sIdx++) {
-                    if (smallBoards[bIdx][sIdx] === null) {
-                        possibleMoves.push({ bIdx, sIdx, score: evaluateMove(bIdx, sIdx) });
+        function aiMinimaxMove() {
+            const possibleMoves = getPossibleMoves(smallBoards, bigBoard, activeBigBoardIndex);
+            if (possibleMoves.length === 0) return;
+
+            let bestScore = -Infinity;
+            let bestMove = possibleMoves[0];
+
+            for (const move of possibleMoves) {
+                // 1手進める (仮想)
+                const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(smallBoards, bigBoard, activeBigBoardIndex, move.bIdx, move.sIdx, 'X');
+                
+                // 次のターンの人間の最善手を計算 (ミニマックスのコア)
+                const score = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, 1, false, -Infinity, Infinity);
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+                } else if (score === bestScore) {
+                    // 同じスコアなら、中央に近いなど好みの場所を選ぶ
+                    if (evaluatePositionPreference(move.sIdx) > evaluatePositionPreference(bestMove.sIdx)) {
+                        bestMove = move;
                     }
                 }
             }
-            possibleMoves.sort((a, b) => b.score - a.score);
-            const bestMove = possibleMoves[0];
             executeMove(bestMove.bIdx, bestMove.sIdx);
         }
 
-        function evaluateMove(bIdx, sIdx) {
+        // ミニマックス関数 (αβ枝刈り付き)
+        function minimax(sBoards, bBoard, aIndex, depth, isMaximizing, alpha, beta) {
+            // ゲーム終了または規定の深さに達したら盤面を評価
+            if (checkWin(bBoard, 'X')) return SCORE_BIG_WIN + depth; // 早い勝利を高評価
+            if (checkWin(bBoard, 'O')) return -SCORE_BIG_WIN - depth; // 早い敗北を低評価
+            if (!bBoard.includes(null)) return 0; // 引き分け
+            if (depth === 0) return evaluateBoard(sBoards, bBoard, aIndex);
+
+            const moves = getPossibleMoves(sBoards, bBoard, aIndex);
+
+            if (isMaximizing) { // AIの番 (スコアを最大化したい)
+                let maxEval = -Infinity;
+                for (const move of moves) {
+                    const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(sBoards, bBoard, aIndex, move.bIdx, move.sIdx, 'X');
+                    const eval = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, depth - 1, false, alpha, beta);
+                    maxEval = Math.max(maxEval, eval);
+                    alpha = Math.max(alpha, eval);
+                    if (beta <= alpha) break; // β枝刈り
+                }
+                return maxEval;
+            } else { // 人間の番 (スコアを最小化したい)
+                let minEval = Infinity;
+                for (const move of moves) {
+                    const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(sBoards, bBoard, aIndex, move.bIdx, move.sIdx, 'O');
+                    const eval = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, depth - 1, true, alpha, beta);
+                    minEval = Math.min(minEval, eval);
+                    beta = Math.min(beta, eval);
+                    if (beta <= alpha) break; // α枝刈り
+                }
+                return minEval;
+            }
+        }
+
+        // 盤面評価関数 (2手先の状態を採点)
+        function evaluateBoard(sBoards, bBoard, aIndex) {
             let score = 0;
-            const tempX = [...smallBoards[bIdx]]; tempX[sIdx] = 'X';
-            if (checkWin(tempX, 'X')) score += 100;
-            const tempO = [...smallBoards[bIdx]]; tempO[sIdx] = 'O';
-            if (checkWin(tempO, 'O')) score += 50;
-            if (bigBoard[sIdx] !== null) score -= 40;
-            score += (8 - PREFERENCE_ORDER.indexOf(sIdx));
+            // 1. 獲得した大きなボードの数
+            bBoard.forEach((v, i) => {
+                if (v === 'X') score += SCORE_SMALL_WIN;
+                if (v === 'O') score -= SCORE_SMALL_WIN;
+                // 2. まだ獲得されていない小さなボード内のリーチ状況
+                if (v === null) {
+                    score += countReaches(sBoards[i], 'X') * 10;
+                    score -= countReaches(sBoards[i], 'O') * 10;
+                }
+            });
+            // 3. 【重要】送り先が「相手にとって有利なボード」なら大幅減点
+            // 次が相手(人間)の番で、aIndex が -1 (どこでも打てる)ならAIに不利
+            if (aIndex === -1) score -= 50; 
             return score;
         }
+
+        // --- AI用の補助関数 ---
+
+        function getPossibleMoves(sBoards, bBoard, aIndex) {
+            const moves = [];
+            const searchIndices = aIndex === -1 
+                ? bBoard.map((v, i) => (v === null && sBoards[i].includes(null)) ? i : null).filter(v => v !== null)
+                : [aIndex];
+            for (let bIdx of searchIndices) {
+                for (let sIdx = 0; sIdx < 9; sIdx++) {
+                    if (sBoards[bIdx][sIdx] === null) moves.push({ bIdx, sIdx });
+                }
+            }
+            return moves;
+        }
+
+        function simulateMove(sBoards, bBoard, aIndex, bIdx, sIdx, player) {
+            // 配列を深くコピー (元の盤面を壊さないため)
+            const nextSmallBoards = sBoards.map(arr => [...arr]);
+            const nextBigBoard = [...bBoard];
+            nextSmallBoards[bIdx][sIdx] = player;
+            if (checkWin(nextSmallBoards[bIdx], player)) {
+                nextBigBoard[bIdx] = player;
+            } else if (!nextSmallBoards[bIdx].includes(null)) {
+                nextBigBoard[bIdx] = 'Draw';
+            }
+            const nextActiveIndex = (nextBigBoard[sIdx] === null) ? sIdx : -1;
+            return { nextSmallBoards, nextBigBoard, nextActiveIndex };
+        }
+
+        function countReaches(board, player) {
+            return WIN_PATTERNS.reduce((count, pattern) => {
+                const cells = pattern.map(idx => board[idx]);
+                // 2マスがプレイヤーのもので、1マスが空いている場合をリーチとみなす
+                if (cells.filter(c => c === player).length === 2 && cells.filter(c => c === null).length === 1) {
+                    return count + 1;
+                }
+                return count;
+            }, 0);
+        }
+
+        function evaluatePositionPreference(sIdx) {
+            // 中央、隅、辺の順に優先
+            return 8 - SCORE_PREFERENCE.indexOf(sIdx);
+        }
+
+        // --- 共通関数 ---
 
         function checkWin(board, player) {
             return WIN_PATTERNS.some(p => p.every(idx => board[idx] === player));
@@ -218,15 +301,14 @@
             if (gameOver) return;
             let label;
             if (gameMode === 'PvE') {
-                label = currentPlayer === 'O' ? 'あなた (◯)' : 'AI (×)';
+                label = currentPlayer === 'O' ? 'あなた (◯)' : 'AIが思考中...';
             } else {
                 label = `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
             }
-            document.getElementById('status').textContent = `${label} の番です`;
+            document.getElementById('status').textContent = `${label}`;
         }
 
         function resetGame() { initGame(); }
-        
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
         }

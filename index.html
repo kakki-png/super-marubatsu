@@ -199,5 +199,14 @@
 
         function resetGame() { initGame(); }
     </script>
+    <script>
+  // Service Workerの登録
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker Registered'));
+  }
+</script>
+
+<link rel="manifest" href="./manifest.json">
 </body>
 </html>

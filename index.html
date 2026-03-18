@@ -64,10 +64,16 @@
 <body>
 
     <div id="menu-screen">
-        <h1>スーパーまるばつ</h1>
-        <button class="menu-btn" onclick="startGame('PvE')">AIと対戦</button>
-        <button class="menu-btn secondary" onclick="startGame('PvP')">二人で対戦</button>
+    <h1>スーパーまるばつ</h1>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        <p style="text-align: center; font-weight: bold; margin-bottom: 5px;">AIと対戦（難易度を選択）</p>
+        <button class="menu-btn" onclick="startGame('PvE', 'Easy')" style="background: #81c784;">初級</button>
+        <button class="menu-btn" onclick="startGame('PvE', 'Normal')" style="background: #4caf50;">中級</button>
+        <button class="menu-btn" onclick="startGame('PvE', 'Hard')" style="background: #2e7d32;">上級</button>
     </div>
+    <hr style="width: 80%; margin: 20px 0; border: 0.5px solid #ccc;">
+    <button class="menu-btn secondary" onclick="startGame('PvP')">二人で対戦</button>
+　　</div>
 
     <div id="game-screen">
         <div id="status"></div>
@@ -77,241 +83,200 @@
             <button class="btn-small" onclick="resetGame()">リセット</button>
         </div>
     </div>
+　<script>
+    const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    const PREFERENCE_ORDER = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+    let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode, aiLevel;
 
-    <script>
-        const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-        // AIの評価用スコア
-        const SCORE_BIG_WIN = 1000;
-        const SCORE_SMALL_WIN = 100;
-        const SCORE_PREFERENCE = [4, 0, 2, 6, 8, 1, 3, 5, 7]; // 中央、隅、辺の順
+    // ゲーム開始処理
+    function startGame(mode, level = 'Normal') {
+        gameMode = mode;
+        aiLevel = level;
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'flex';
+        initGame();
+    }
 
-        let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode;
+    // メニューに戻る
+    function backToMenu() {
+        document.getElementById('menu-screen').style.display = 'flex';
+        document.getElementById('game-screen').style.display = 'none';
+    }
 
-        function startGame(mode) {
-            gameMode = mode;
-            document.getElementById('menu-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'flex';
-            initGame();
+    // 初期化
+    function initGame() {
+        smallBoards = Array(9).fill(null).map(() => Array(9).fill(null));
+        bigBoard = Array(9).fill(null);
+        currentPlayer = 'O';
+        activeBigBoardIndex = -1;
+        gameOver = false;
+        renderBoard();
+        updateStatus();
+    }
+
+    // 描画
+    function renderBoard() {
+        const boardElement = document.getElementById('ultimate-board');
+        boardElement.innerHTML = '';
+        for (let i = 0; i < 9; i++) {
+            const bigCell = document.createElement('div');
+            bigCell.className = 'big-cell';
+            if (!gameOver && (activeBigBoardIndex === -1 || activeBigBoardIndex === i) && bigBoard[i] === null) {
+                bigCell.classList.add('active-board');
+            }
+            for (let j = 0; j < 9; j++) {
+                const smallCell = document.createElement('div');
+                smallCell.className = 'small-cell';
+                smallCell.textContent = smallBoards[i][j] || '';
+                smallCell.onclick = () => handleMove(i, j);
+                bigCell.appendChild(smallCell);
+            }
+            if (bigBoard[i]) {
+                const overlay = document.createElement('div');
+                overlay.className = `won-overlay ${bigBoard[i]}`;
+                overlay.textContent = bigBoard[i] === 'Draw' ? '=' : bigBoard[i];
+                bigCell.appendChild(overlay);
+            }
+            boardElement.appendChild(bigCell);
+        }
+    }
+
+    // プレイヤーの手
+    function handleMove(bigIndex, smallIndex) {
+        if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
+        if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
+
+        executeMove(bigIndex, smallIndex);
+        if (!gameOver && gameMode === 'PvE' && currentPlayer === 'X') {
+            setTimeout(aiSmartMove, 500);
+        }
+    }
+
+    // 実際に駒を置く処理
+    function executeMove(bigIndex, smallIndex) {
+        smallBoards[bigIndex][smallIndex] = currentPlayer;
+        if (checkWin(smallBoards[bigIndex], currentPlayer)) {
+            bigBoard[bigIndex] = currentPlayer;
+        } else if (!smallBoards[bigIndex].includes(null)) {
+            bigBoard[bigIndex] = 'Draw';
         }
 
-        function backToMenu() {
-            document.getElementById('menu-screen').style.display = 'flex';
-            document.getElementById('game-screen').style.display = 'none';
-        }
-
-        function initGame() {
-            smallBoards = Array(9).fill(null).map(() => Array(9).fill(null));
-            bigBoard = Array(9).fill(null);
-            currentPlayer = 'O';
-            activeBigBoardIndex = -1;
-            gameOver = false;
+        if (checkWin(bigBoard, currentPlayer)) {
+            gameOver = true;
             renderBoard();
-            updateStatus();
+            document.getElementById('status').textContent = `🏆 ${currentPlayer} の勝利！`;
+            return;
         }
 
-        function renderBoard() {
-            const boardElement = document.getElementById('ultimate-board');
-            boardElement.innerHTML = '';
-            for (let i = 0; i < 9; i++) {
-                const bigCell = document.createElement('div');
-                bigCell.className = 'big-cell';
-                if (!gameOver && (activeBigBoardIndex === -1 || activeBigBoardIndex === i) && bigBoard[i] === null) {
-                    bigCell.classList.add('active-board');
-                }
-                for (let j = 0; j < 9; j++) {
-                    const smallCell = document.createElement('div');
-                    smallCell.className = 'small-cell';
-                    smallCell.textContent = smallBoards[i][j] || '';
-                    smallCell.onclick = () => handleMove(i, j);
-                    bigCell.appendChild(smallCell);
-                }
-                if (bigBoard[i]) {
-                    const overlay = document.createElement('div');
-                    overlay.className = `won-overlay ${bigBoard[i]}`;
-                    overlay.textContent = bigBoard[i] === 'Draw' ? '=' : bigBoard[i];
-                    bigCell.appendChild(overlay);
-                }
-                boardElement.appendChild(bigCell);
+        activeBigBoardIndex = (bigBoard[smallIndex] === null) ? smallIndex : -1;
+        currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
+        updateStatus();
+        renderBoard();
+    }
+
+    // --- AI思考エンジン（難易度別） ---
+    function aiSmartMove() {
+        const possibleMoves = [];
+        const searchIndices = activeBigBoardIndex === -1 
+            ? bigBoard.map((v, i) => v === null ? i : null).filter(v => v !== null)
+            : [activeBigBoardIndex];
+
+        for (let bIdx of searchIndices) {
+            for (let sIdx = 0; sIdx < 9; sIdx++) {
+                if (smallBoards[bIdx][sIdx] === null) possibleMoves.push({ bIdx, sIdx });
             }
         }
 
-        function handleMove(bigIndex, smallIndex) {
-            if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
-            if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
-            executeMove(bigIndex, smallIndex);
-            if (!gameOver && gameMode === 'PvE' && currentPlayer === 'X') {
-                document.getElementById('status').textContent = 'AIが思考中...';
-                // 思考時間を少し設けてからAIの手を実行
-                setTimeout(aiMinimaxMove, 300);
-            }
-        }
-
-        function executeMove(bigIndex, smallIndex) {
-            smallBoards[bigIndex][smallIndex] = currentPlayer;
-            if (checkWin(smallBoards[bigIndex], currentPlayer)) {
-                bigBoard[bigIndex] = currentPlayer;
-            } else if (!smallBoards[bigIndex].includes(null)) {
-                bigBoard[bigIndex] = 'Draw';
-            }
-            if (checkWin(bigBoard, currentPlayer)) {
-                gameOver = true;
-                renderBoard();
-                document.getElementById('status').textContent = `🏆 ${currentPlayer} の勝利！`;
-                return;
-            }
-            activeBigBoardIndex = (bigBoard[smallIndex] === null) ? smallIndex : -1;
-            currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
-            updateStatus();
-            renderBoard();
-        }
-
-        // --- 強化版AI: 2手読みミニマックス法 ---
-
-        function aiMinimaxMove() {
-            const possibleMoves = getPossibleMoves(smallBoards, bigBoard, activeBigBoardIndex);
-            if (possibleMoves.length === 0) return;
-
+        let finalMove;
+        if (aiLevel === 'Easy') {
+            finalMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+        } else if (aiLevel === 'Normal') {
+            possibleMoves.forEach(m => m.score = evaluateSingleMove(m.bIdx, m.sIdx, 'X'));
+            possibleMoves.sort((a, b) => b.score - a.score);
+            finalMove = possibleMoves[0];
+        } else {
+            // Hard (2手読み)
             let bestScore = -Infinity;
-            let bestMove = possibleMoves[0];
-
-            for (const move of possibleMoves) {
-                // 1手進める (仮想)
-                const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(smallBoards, bigBoard, activeBigBoardIndex, move.bIdx, move.sIdx, 'X');
-                
-                // 次のターンの人間の最善手を計算 (ミニマックスのコア)
-                const score = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, 1, false, -Infinity, Infinity);
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = move;
-                } else if (score === bestScore) {
-                    // 同じスコアなら、中央に近いなど好みの場所を選ぶ
-                    if (evaluatePositionPreference(move.sIdx) > evaluatePositionPreference(bestMove.sIdx)) {
-                        bestMove = move;
-                    }
-                }
+            let bestMoves = [];
+            for (let move of possibleMoves) {
+                const originalSmall = [...smallBoards[move.bIdx]];
+                const originalBig = [...bigBoard];
+                const originalActive = activeBigBoardIndex;
+                virtualExecuteMove(move.bIdx, move.sIdx, 'X');
+                const score = getHumanBestScore();
+                smallBoards[move.bIdx] = originalSmall; bigBoard = originalBig; activeBigBoardIndex = originalActive;
+                if (score > bestScore) { bestScore = score; bestMoves = [move]; }
+                else if (score === bestScore) { bestMoves.push(move); }
             }
-            executeMove(bestMove.bIdx, bestMove.sIdx);
+            finalMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
+        executeMove(finalMove.bIdx, finalMove.sIdx);
+    }
 
-        // ミニマックス関数 (αβ枝刈り付き)
-        function minimax(sBoards, bBoard, aIndex, depth, isMaximizing, alpha, beta) {
-            // ゲーム終了または規定の深さに達したら盤面を評価
-            if (checkWin(bBoard, 'X')) return SCORE_BIG_WIN + depth; // 早い勝利を高評価
-            if (checkWin(bBoard, 'O')) return -SCORE_BIG_WIN - depth; // 早い敗北を低評価
-            if (!bBoard.includes(null)) return 0; // 引き分け
-            if (depth === 0) return evaluateBoard(sBoards, bBoard, aIndex);
-
-            const moves = getPossibleMoves(sBoards, bBoard, aIndex);
-
-            if (isMaximizing) { // AIの番 (スコアを最大化したい)
-                let maxEval = -Infinity;
-                for (const move of moves) {
-                    const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(sBoards, bBoard, aIndex, move.bIdx, move.sIdx, 'X');
-                    const eval = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, depth - 1, false, alpha, beta);
-                    maxEval = Math.max(maxEval, eval);
-                    alpha = Math.max(alpha, eval);
-                    if (beta <= alpha) break; // β枝刈り
-                }
-                return maxEval;
-            } else { // 人間の番 (スコアを最小化したい)
-                let minEval = Infinity;
-                for (const move of moves) {
-                    const { nextSmallBoards, nextBigBoard, nextActiveIndex } = simulateMove(sBoards, bBoard, aIndex, move.bIdx, move.sIdx, 'O');
-                    const eval = minimax(nextSmallBoards, nextBigBoard, nextActiveIndex, depth - 1, true, alpha, beta);
-                    minEval = Math.min(minEval, eval);
-                    beta = Math.min(beta, eval);
-                    if (beta <= alpha) break; // α枝刈り
-                }
-                return minEval;
-            }
+    function getHumanBestScore() {
+        if (checkWin(bigBoard, 'X')) return 1000;
+        if (!bigBoard.includes(null)) return 0;
+        let bestHumanScore = -Infinity;
+        const hMoves = [];
+        const hIndices = activeBigBoardIndex === -1 ? bigBoard.map((v,i)=>v===null?i:null).filter(v=>v!==null) : [activeBigBoardIndex];
+        for (let b of hIndices) {
+            for (let s=0; s<9; s++) { if (smallBoards[b][s] === null) hMoves.push({b, s}); }
         }
-
-        // 盤面評価関数 (2手先の状態を採点)
-        function evaluateBoard(sBoards, bBoard, aIndex) {
-            let score = 0;
-            // 1. 獲得した大きなボードの数
-            bBoard.forEach((v, i) => {
-                if (v === 'X') score += SCORE_SMALL_WIN;
-                if (v === 'O') score -= SCORE_SMALL_WIN;
-                // 2. まだ獲得されていない小さなボード内のリーチ状況
-                if (v === null) {
-                    score += countReaches(sBoards[i], 'X') * 10;
-                    score -= countReaches(sBoards[i], 'O') * 10;
-                }
-            });
-            // 3. 【重要】送り先が「相手にとって有利なボード」なら大幅減点
-            // 次が相手(人間)の番で、aIndex が -1 (どこでも打てる)ならAIに不利
-            if (aIndex === -1) score -= 50; 
-            return score;
+        if (hMoves.length === 0) return -500;
+        for (let m of hMoves) {
+            let s = evaluateSingleMove(m.b, m.s, 'O');
+            if (s > bestHumanScore) bestHumanScore = s;
         }
+        return -bestHumanScore;
+    }
 
-        // --- AI用の補助関数 ---
+    function virtualExecuteMove(bIdx, sIdx, p) {
+        smallBoards[bIdx][sIdx] = p;
+        if (checkWin(smallBoards[bIdx], p)) bigBoard[bIdx] = p;
+        else if (!smallBoards[bIdx].includes(null)) bigBoard[bIdx] = 'Draw';
+        activeBigBoardIndex = (bigBoard[sIdx] === null) ? sIdx : -1;
+    }
 
-        function getPossibleMoves(sBoards, bBoard, aIndex) {
-            const moves = [];
-            const searchIndices = aIndex === -1 
-                ? bBoard.map((v, i) => (v === null && sBoards[i].includes(null)) ? i : null).filter(v => v !== null)
-                : [aIndex];
-            for (let bIdx of searchIndices) {
-                for (let sIdx = 0; sIdx < 9; sIdx++) {
-                    if (sBoards[bIdx][sIdx] === null) moves.push({ bIdx, sIdx });
-                }
-            }
-            return moves;
-        }
+    function evaluateSingleMove(bIdx, sIdx, p) {
+        let sc = 0; const opp = p === 'O' ? 'X' : 'O';
+        const tmp = [...smallBoards[bIdx]]; tmp[sIdx] = p;
+        if (checkWin(tmp, p)) sc += 100;
+        tmp[sIdx] = opp;
+        if (checkWin(tmp, opp)) sc += 80;
+        if (sIdx === 4) sc += 20;
+        if ([0,2,6,8].includes(sIdx)) sc += 10;
+        return sc;
+    }
 
-        function simulateMove(sBoards, bBoard, aIndex, bIdx, sIdx, player) {
-            // 配列を深くコピー (元の盤面を壊さないため)
-            const nextSmallBoards = sBoards.map(arr => [...arr]);
-            const nextBigBoard = [...bBoard];
-            nextSmallBoards[bIdx][sIdx] = player;
-            if (checkWin(nextSmallBoards[bIdx], player)) {
-                nextBigBoard[bIdx] = player;
-            } else if (!nextSmallBoards[bIdx].includes(null)) {
-                nextBigBoard[bIdx] = 'Draw';
-            }
-            const nextActiveIndex = (nextBigBoard[sIdx] === null) ? sIdx : -1;
-            return { nextSmallBoards, nextBigBoard, nextActiveIndex };
-        }
+    function checkWin(board, player) {
+        return WIN_PATTERNS.some(p => p.every(idx => board[idx] === player));
+    }
 
-        function countReaches(board, player) {
-            return WIN_PATTERNS.reduce((count, pattern) => {
-                const cells = pattern.map(idx => board[idx]);
-                // 2マスがプレイヤーのもので、1マスが空いている場合をリーチとみなす
-                if (cells.filter(c => c === player).length === 2 && cells.filter(c => c === null).length === 1) {
-                    return count + 1;
-                }
-                return count;
-            }, 0);
-        }
+    function updateStatus() {
+        if (gameOver) return;
+        const levelJa = { 'Easy': '初級', 'Normal': '中級', 'Hard': '上級' };
+        const label = gameMode === 'PvE' 
+            ? (currentPlayer === 'O' ? 'あなた (◯)' : `AI (${levelJa[aiLevel]}) (×)`)
+            : `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
+        document.getElementById('status').textContent = `${label} の番です`;
+    }
 
-        function evaluatePositionPreference(sIdx) {
-            // 中央、隅、辺の順に優先
-            return 8 - SCORE_PREFERENCE.indexOf(sIdx);
-        }
-
-        // --- 共通関数 ---
-
-        function checkWin(board, player) {
-            return WIN_PATTERNS.some(p => p.every(idx => board[idx] === player));
-        }
-
-        function updateStatus() {
-            if (gameOver) return;
-            let label;
-            if (gameMode === 'PvE') {
-                label = currentPlayer === 'O' ? 'あなた (◯)' : 'AIが思考中...';
-            } else {
-                label = `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
-            }
-            document.getElementById('status').textContent = `${label}`;
-        }
-
-        function resetGame() { initGame(); }
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
-        }
-    </script>
+    function resetGame() { initGame(); }
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
+    }
+    function updateStatus() {
+    if (gameOver) return;
+    let label;
+    if (gameMode === 'PvE') {
+        const levelJa = { 'Easy': '初級', 'Normal': '中級', 'Hard': '上級' };
+        label = currentPlayer === 'O' ? 'あなた (◯)' : `AI (${levelJa[aiLevel]}) (×)`;
+    } else {
+        label = `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
+    }
+    document.getElementById('status').textContent = `${label} の番です`;
+    } 
+　</script>
+   
 </body>
 </html>

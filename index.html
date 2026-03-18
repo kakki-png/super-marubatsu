@@ -9,7 +9,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
     <style>
-        /* CSSは以前の「復活・完全版」と同じです */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: -apple-system, sans-serif;
@@ -17,38 +16,52 @@
             background-color: #f8f9fa; margin: 0; min-height: 100vh;
             touch-action: manipulation; overflow: hidden;
         }
+
+        /* メニュー画面 */
         #menu-screen {
             display: flex; flex-direction: column; align-items: center; gap: 20px;
             z-index: 10; background: #f8f9fa; width: 100%; height: 100%; position: absolute; justify-content: center;
+            padding: 20px;
         }
-        h1 { color: #333; margin-bottom: 30px; font-size: 24px; }
+        h1 { color: #333; margin-bottom: 20px; font-size: 24px; }
+        .menu-group { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 250px; }
         .menu-btn {
-            width: 200px; padding: 15px; font-size: 18px; font-weight: bold;
+            width: 100%; padding: 15px; font-size: 18px; font-weight: bold;
             cursor: pointer; border-radius: 12px; border: none;
             background: #1976d2; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .menu-btn.secondary { background: #4caf50; }
+        .menu-btn.outline { background: white; color: #333; border: 2px solid #ddd; }
+        
+        #order-selection { display: none; flex-direction: column; align-items: center; gap: 15px; }
+
+        /* ゲーム画面 */
         #game-screen { display: none; flex-direction: column; align-items: center; width: 100%; }
-        #status { font-size: 18px; font-weight: bold; margin: 15px 0; height: 24px; color: #333; text-align: center; }
+        #status { font-size: 16px; font-weight: bold; margin: 15px 0; height: 24px; color: #333; }
+
         #ultimate-board {
             display: grid; grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr); gap: 6px;
             background-color: #444; padding: 6px; border-radius: 8px;
             width: 92vw; max-width: 400px; aspect-ratio: 1 / 1;
         }
+
         .big-cell {
             display: grid; grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr); gap: 2px;
             background-color: #fff; position: relative;
         }
+
         .active-board {
             background-color: #fffde7 !important;
             box-shadow: inset 0 0 0 3px #fdd835; z-index: 1;
         }
+
         .small-cell {
             background-color: #fff; display: flex; align-items: center; justify-content: center;
             font-size: min(5vw, 20px); font-weight: bold; cursor: pointer; border: 1px solid #f0f0f0;
         }
+
         .won-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
@@ -57,23 +70,33 @@
         }
         .won-overlay.O { color: #1976d2; }
         .won-overlay.X { color: #d32f2f; }
+
         .controls { margin-top: 25px; display: flex; gap: 15px; }
-        .btn-small { padding: 10px 20px; font-size: 14px; cursor: pointer; border-radius: 20px; border: 1px solid #ccc; background: white; }
+        .btn-small {
+            padding: 10px 20px; font-size: 14px; cursor: pointer;
+            border-radius: 20px; border: 1px solid #ccc; background: white;
+        }
     </style>
 </head>
 <body>
 
     <div id="menu-screen">
-    <h1>スーパーまるばつ</h1>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-        <p style="text-align: center; font-weight: bold; margin-bottom: 5px;">AIと対戦（難易度を選択）</p>
-        <button class="menu-btn" onclick="startGame('PvE', 'Easy')" style="background: #81c784;">初級</button>
-        <button class="menu-btn" onclick="startGame('PvE', 'Normal')" style="background: #4caf50;">中級</button>
-        <button class="menu-btn" onclick="startGame('PvE', 'Hard')" style="background: #2e7d32;">上級</button>
+        <div id="level-selection" class="menu-group">
+            <h1>スーパーまるばつ</h1>
+            <p style="text-align: center; font-weight: bold;">難易度を選択</p>
+            <button class="menu-btn" onclick="selectLevel('Easy')" style="background: #81c784;">初級</button>
+            <button class="menu-btn" onclick="selectLevel('Normal')" style="background: #4caf50;">中級</button>
+            <button class="menu-btn" onclick="selectLevel('Hard')" style="background: #2e7d32;">上級</button>
+            <button class="menu-btn secondary" style="margin-top:10px" onclick="startGame('PvP')">二人で対戦</button>
+        </div>
+
+        <div id="order-selection" class="menu-group">
+            <h1>順番を選択</h1>
+            <button class="menu-btn" onclick="setOrder('O')">先攻 (◯)</button>
+            <button class="menu-btn secondary" onclick="setOrder('X')">後攻 (×)</button>
+            <button class="menu-btn outline" onclick="cancelOrder()">戻る</button>
+        </div>
     </div>
-    <hr style="width: 80%; margin: 20px 0; border: 0.5px solid #ccc;">
-    <button class="menu-btn secondary" onclick="startGame('PvP')">二人で対戦</button>
-　　</div>
 
     <div id="game-screen">
         <div id="status"></div>
@@ -83,200 +106,227 @@
             <button class="btn-small" onclick="resetGame()">リセット</button>
         </div>
     </div>
-　<script>
-    const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    const PREFERENCE_ORDER = [4, 0, 2, 6, 8, 1, 3, 5, 7];
-    let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode, aiLevel;
 
-    // ゲーム開始処理
-    function startGame(mode, level = 'Normal') {
-        gameMode = mode;
-        aiLevel = level;
-        document.getElementById('menu-screen').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'flex';
-        initGame();
-    }
+    <script>
+        const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+        let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode, aiLevel, userSymbol;
 
-    // メニューに戻る
-    function backToMenu() {
-        document.getElementById('menu-screen').style.display = 'flex';
-        document.getElementById('game-screen').style.display = 'none';
-    }
-
-    // 初期化
-    function initGame() {
-        smallBoards = Array(9).fill(null).map(() => Array(9).fill(null));
-        bigBoard = Array(9).fill(null);
-        currentPlayer = 'O';
-        activeBigBoardIndex = -1;
-        gameOver = false;
-        renderBoard();
-        updateStatus();
-    }
-
-    // 描画
-    function renderBoard() {
-        const boardElement = document.getElementById('ultimate-board');
-        boardElement.innerHTML = '';
-        for (let i = 0; i < 9; i++) {
-            const bigCell = document.createElement('div');
-            bigCell.className = 'big-cell';
-            if (!gameOver && (activeBigBoardIndex === -1 || activeBigBoardIndex === i) && bigBoard[i] === null) {
-                bigCell.classList.add('active-board');
-            }
-            for (let j = 0; j < 9; j++) {
-                const smallCell = document.createElement('div');
-                smallCell.className = 'small-cell';
-                smallCell.textContent = smallBoards[i][j] || '';
-                smallCell.onclick = () => handleMove(i, j);
-                bigCell.appendChild(smallCell);
-            }
-            if (bigBoard[i]) {
-                const overlay = document.createElement('div');
-                overlay.className = `won-overlay ${bigBoard[i]}`;
-                overlay.textContent = bigBoard[i] === 'Draw' ? '=' : bigBoard[i];
-                bigCell.appendChild(overlay);
-            }
-            boardElement.appendChild(bigCell);
-        }
-    }
-
-    // プレイヤーの手
-    function handleMove(bigIndex, smallIndex) {
-        if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
-        if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
-
-        executeMove(bigIndex, smallIndex);
-        if (!gameOver && gameMode === 'PvE' && currentPlayer === 'X') {
-            setTimeout(aiSmartMove, 500);
-        }
-    }
-
-    // 実際に駒を置く処理
-    function executeMove(bigIndex, smallIndex) {
-        smallBoards[bigIndex][smallIndex] = currentPlayer;
-        if (checkWin(smallBoards[bigIndex], currentPlayer)) {
-            bigBoard[bigIndex] = currentPlayer;
-        } else if (!smallBoards[bigIndex].includes(null)) {
-            bigBoard[bigIndex] = 'Draw';
+        // メニュー操作
+        function selectLevel(level) {
+            aiLevel = level;
+            gameMode = 'PvE';
+            document.getElementById('level-selection').style.display = 'none';
+            document.getElementById('order-selection').style.display = 'flex';
         }
 
-        if (checkWin(bigBoard, currentPlayer)) {
-            gameOver = true;
+        function cancelOrder() {
+            document.getElementById('level-selection').style.display = 'flex';
+            document.getElementById('order-selection').style.display = 'none';
+        }
+
+        function setOrder(symbol) {
+            userSymbol = symbol;
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            initGame();
+        }
+
+        function startGame(mode) {
+            gameMode = mode;
+            userSymbol = 'O'; // 対人戦はP1が先攻
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            initGame();
+        }
+
+        function backToMenu() {
+            document.getElementById('menu-screen').style.display = 'flex';
+            document.getElementById('order-selection').style.display = 'none';
+            document.getElementById('level-selection').style.display = 'flex';
+            document.getElementById('game-screen').style.display = 'none';
+        }
+
+        // ゲームロジック
+        function initGame() {
+            smallBoards = Array(9).fill(null).map(() => Array(9).fill(null));
+            bigBoard = Array(9).fill(null);
+            currentPlayer = 'O';
+            activeBigBoardIndex = -1;
+            gameOver = false;
             renderBoard();
-            document.getElementById('status').textContent = `🏆 ${currentPlayer} の勝利！`;
-            return;
-        }
+            updateStatus();
 
-        activeBigBoardIndex = (bigBoard[smallIndex] === null) ? smallIndex : -1;
-        currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
-        updateStatus();
-        renderBoard();
-    }
-
-    // --- AI思考エンジン（難易度別） ---
-    function aiSmartMove() {
-        const possibleMoves = [];
-        const searchIndices = activeBigBoardIndex === -1 
-            ? bigBoard.map((v, i) => v === null ? i : null).filter(v => v !== null)
-            : [activeBigBoardIndex];
-
-        for (let bIdx of searchIndices) {
-            for (let sIdx = 0; sIdx < 9; sIdx++) {
-                if (smallBoards[bIdx][sIdx] === null) possibleMoves.push({ bIdx, sIdx });
+            // AIが先攻(O)の場合、即座に打たせる
+            if (gameMode === 'PvE' && userSymbol === 'X' && currentPlayer === 'O') {
+                setTimeout(aiSmartMove, 600);
             }
         }
 
-        let finalMove;
-        if (aiLevel === 'Easy') {
-            finalMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-        } else if (aiLevel === 'Normal') {
-            possibleMoves.forEach(m => m.score = evaluateSingleMove(m.bIdx, m.sIdx, 'X'));
-            possibleMoves.sort((a, b) => b.score - a.score);
-            finalMove = possibleMoves[0];
-        } else {
-            // Hard (2手読み)
-            let bestScore = -Infinity;
-            let bestMoves = [];
-            for (let move of possibleMoves) {
-                const originalSmall = [...smallBoards[move.bIdx]];
-                const originalBig = [...bigBoard];
-                const originalActive = activeBigBoardIndex;
-                virtualExecuteMove(move.bIdx, move.sIdx, 'X');
-                const score = getHumanBestScore();
-                smallBoards[move.bIdx] = originalSmall; bigBoard = originalBig; activeBigBoardIndex = originalActive;
-                if (score > bestScore) { bestScore = score; bestMoves = [move]; }
-                else if (score === bestScore) { bestMoves.push(move); }
+        function renderBoard() {
+            const boardElement = document.getElementById('ultimate-board');
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const bigCell = document.createElement('div');
+                bigCell.className = 'big-cell';
+                if (!gameOver && (activeBigBoardIndex === -1 || activeBigBoardIndex === i) && bigBoard[i] === null) {
+                    bigCell.classList.add('active-board');
+                }
+                for (let j = 0; j < 9; j++) {
+                    const smallCell = document.createElement('div');
+                    smallCell.className = 'small-cell';
+                    smallCell.textContent = smallBoards[i][j] || '';
+                    smallCell.onclick = () => handleMove(i, j);
+                    bigCell.appendChild(smallCell);
+                }
+                if (bigBoard[i]) {
+                    const overlay = document.createElement('div');
+                    overlay.className = `won-overlay ${bigBoard[i]}`;
+                    overlay.textContent = bigBoard[i] === 'Draw' ? '=' : bigBoard[i];
+                    bigCell.appendChild(overlay);
+                }
+                boardElement.appendChild(bigCell);
             }
-            finalMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
-        executeMove(finalMove.bIdx, finalMove.sIdx);
-    }
 
-    function getHumanBestScore() {
-        if (checkWin(bigBoard, 'X')) return 1000;
-        if (!bigBoard.includes(null)) return 0;
-        let bestHumanScore = -Infinity;
-        const hMoves = [];
-        const hIndices = activeBigBoardIndex === -1 ? bigBoard.map((v,i)=>v===null?i:null).filter(v=>v!==null) : [activeBigBoardIndex];
-        for (let b of hIndices) {
-            for (let s=0; s<9; s++) { if (smallBoards[b][s] === null) hMoves.push({b, s}); }
+        function handleMove(bigIndex, smallIndex) {
+            if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
+            if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
+            
+            // 自分の番かチェック
+            if (gameMode === 'PvE' && currentPlayer !== userSymbol) return;
+
+            executeMove(bigIndex, smallIndex);
+            
+            if (!gameOver && gameMode === 'PvE' && currentPlayer !== userSymbol) {
+                setTimeout(aiSmartMove, 600);
+            }
         }
-        if (hMoves.length === 0) return -500;
-        for (let m of hMoves) {
-            let s = evaluateSingleMove(m.b, m.s, 'O');
-            if (s > bestHumanScore) bestHumanScore = s;
+
+        function executeMove(bigIndex, smallIndex) {
+            smallBoards[bigIndex][smallIndex] = currentPlayer;
+            if (checkWin(smallBoards[bigIndex], currentPlayer)) {
+                bigBoard[bigIndex] = currentPlayer;
+            } else if (!smallBoards[bigIndex].includes(null)) {
+                bigBoard[bigIndex] = 'Draw';
+            }
+
+            if (checkWin(bigBoard, currentPlayer)) {
+                gameOver = true;
+                renderBoard();
+                document.getElementById('status').textContent = `🏆 ${currentPlayer} の勝利！`;
+                return;
+            }
+
+            activeBigBoardIndex = (bigBoard[smallIndex] === null) ? smallIndex : -1;
+            currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
+            updateStatus();
+            renderBoard();
         }
-        return -bestHumanScore;
-    }
 
-    function virtualExecuteMove(bIdx, sIdx, p) {
-        smallBoards[bIdx][sIdx] = p;
-        if (checkWin(smallBoards[bIdx], p)) bigBoard[bIdx] = p;
-        else if (!smallBoards[bIdx].includes(null)) bigBoard[bIdx] = 'Draw';
-        activeBigBoardIndex = (bigBoard[sIdx] === null) ? sIdx : -1;
-    }
+        // --- AIロジック ---
+        function aiSmartMove() {
+            const possibleMoves = [];
+            const searchIndices = activeBigBoardIndex === -1 
+                ? bigBoard.map((v, i) => v === null ? i : null).filter(v => v !== null)
+                : [activeBigBoardIndex];
 
-    function evaluateSingleMove(bIdx, sIdx, p) {
-        let sc = 0; const opp = p === 'O' ? 'X' : 'O';
-        const tmp = [...smallBoards[bIdx]]; tmp[sIdx] = p;
-        if (checkWin(tmp, p)) sc += 100;
-        tmp[sIdx] = opp;
-        if (checkWin(tmp, opp)) sc += 80;
-        if (sIdx === 4) sc += 20;
-        if ([0,2,6,8].includes(sIdx)) sc += 10;
-        return sc;
-    }
+            for (let bIdx of searchIndices) {
+                for (let sIdx = 0; sIdx < 9; sIdx++) {
+                    if (smallBoards[bIdx][sIdx] === null) possibleMoves.push({ bIdx, sIdx });
+                }
+            }
 
-    function checkWin(board, player) {
-        return WIN_PATTERNS.some(p => p.every(idx => board[idx] === player));
-    }
+            if (possibleMoves.length === 0) return;
 
-    function updateStatus() {
-        if (gameOver) return;
-        const levelJa = { 'Easy': '初級', 'Normal': '中級', 'Hard': '上級' };
-        const label = gameMode === 'PvE' 
-            ? (currentPlayer === 'O' ? 'あなた (◯)' : `AI (${levelJa[aiLevel]}) (×)`)
-            : `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
-        document.getElementById('status').textContent = `${label} の番です`;
-    }
+            let finalMove;
+            const aiSymbol = (userSymbol === 'O') ? 'X' : 'O';
 
-    function resetGame() { initGame(); }
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
-    }
-    function updateStatus() {
-    if (gameOver) return;
-    let label;
-    if (gameMode === 'PvE') {
-        const levelJa = { 'Easy': '初級', 'Normal': '中級', 'Hard': '上級' };
-        label = currentPlayer === 'O' ? 'あなた (◯)' : `AI (${levelJa[aiLevel]}) (×)`;
-    } else {
-        label = `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
-    }
-    document.getElementById('status').textContent = `${label} の番です`;
-    } 
-　</script>
-   
+            if (aiLevel === 'Easy') {
+                finalMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            } else if (aiLevel === 'Normal') {
+                possibleMoves.forEach(m => m.score = evaluateSingleMove(m.bIdx, m.sIdx, aiSymbol));
+                possibleMoves.sort((a, b) => b.score - a.score);
+                finalMove = possibleMoves[0];
+            } else {
+                // Hard (2手読み)
+                let bestScore = -Infinity;
+                let bestMoves = [];
+                for (let move of possibleMoves) {
+                    const originalSmall = [...smallBoards[move.bIdx]];
+                    const originalBig = [...bigBoard];
+                    const originalActive = activeBigBoardIndex;
+                    
+                    virtualExecuteMove(move.bIdx, move.sIdx, aiSymbol);
+                    const score = getSimulationScore(userSymbol, aiSymbol);
+                    
+                    smallBoards[move.bIdx] = originalSmall; bigBoard = originalBig; activeBigBoardIndex = originalActive;
+                    
+                    if (score > bestScore) { bestScore = score; bestMoves = [move]; }
+                    else if (score === bestScore) { bestMoves.push(move); }
+                }
+                finalMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+            }
+            executeMove(finalMove.bIdx, finalMove.sIdx);
+        }
+
+        function getSimulationScore(humanP, aiP) {
+            if (checkWin(bigBoard, aiP)) return 1000;
+            if (!bigBoard.includes(null)) return 0;
+            let bestHumanScore = -Infinity;
+            const hMoves = [];
+            const hIndices = activeBigBoardIndex === -1 ? bigBoard.map((v,i)=>v===null?i:null).filter(v=>v!==null) : [activeBigBoardIndex];
+            for (let b of hIndices) {
+                for (let s=0; s<9; s++) { if (smallBoards[b][s] === null) hMoves.push({b, s}); }
+            }
+            if (hMoves.length === 0) return -500;
+            for (let m of hMoves) {
+                let s = evaluateSingleMove(m.b, m.s, humanP);
+                if (s > bestHumanScore) bestHumanScore = s;
+            }
+            return -bestHumanScore;
+        }
+
+        function virtualExecuteMove(bIdx, sIdx, p) {
+            smallBoards[bIdx][sIdx] = p;
+            if (checkWin(smallBoards[bIdx], p)) bigBoard[bIdx] = p;
+            else if (!smallBoards[bIdx].includes(null)) bigBoard[bIdx] = 'Draw';
+            activeBigBoardIndex = (bigBoard[sIdx] === null) ? sIdx : -1;
+        }
+
+        function evaluateSingleMove(bIdx, sIdx, p) {
+            let sc = 0; const opp = (p === 'O') ? 'X' : 'O';
+            const tmp = [...smallBoards[bIdx]]; tmp[sIdx] = p;
+            if (checkWin(tmp, p)) sc += 100;
+            tmp[sIdx] = opp;
+            if (checkWin(tmp, opp)) sc += 80;
+            if (sIdx === 4) sc += 20;
+            if ([0,2,6,8].includes(sIdx)) sc += 10;
+            return sc;
+        }
+
+        function checkWin(board, player) {
+            return WIN_PATTERNS.some(p => p.every(idx => board[idx] === player));
+        }
+
+        function updateStatus() {
+            if (gameOver) return;
+            const levelJa = { 'Easy': '初級', 'Normal': '中級', 'Hard': '上級' };
+            const aiSymbol = (userSymbol === 'O') ? 'X' : 'O';
+            let label;
+            if (gameMode === 'PvE') {
+                if (currentPlayer === userSymbol) label = `あなた (${userSymbol})`;
+                else label = `AI (${levelJa[aiLevel]}) (${aiSymbol})`;
+            } else {
+                label = `プレイヤー ${currentPlayer === 'O' ? '1 (◯)' : '2 (×)'}`;
+            }
+            document.getElementById('status').textContent = `${label} の番です`;
+        }
+
+        function resetGame() { initGame(); }
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
+        }
+    </script>
 </body>
 </html>

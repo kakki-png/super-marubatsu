@@ -17,31 +17,31 @@
             touch-action: manipulation; overflow: hidden;
         }
 
-        /* メニュー画面 */
-       /* メニュー画面 */
+        /* メニュー画面（中央揃えを強化） */
         #menu-screen {
-         display: flex; 
-         flex-direction: column; 
-         align-items: center; /* 子要素（h1やボタン）を水平方向の中央に揃える */
-         justify-content: center; /* 垂直方向の中央に揃える */
-         gap: 20px;
-         z-index: 10; 
-         background: #f8f9fa; 
-         width: 100%; 
-         height: 100%; 
-         position: absolute; 
-         padding: 20px;
-         text-align: center; /* テキスト自体も中央揃えにする */
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 20px; z-index: 10; background: #f8f9fa; 
+            width: 100%; height: 100%; position: absolute; 
+            padding: 20px; text-align: center;
         }
-
-        h1 {  
-            color: #333; 
-            margin: 0 0 20px 0; /* 余計なマージンをリセットして下にだけ隙間を作る */
-            font-size: 24px; 
-            width: 100%; /* 幅をいっぱいにして中央揃えを確実にする */
+        h1 { color: #333; margin: 0 0 20px 0; font-size: 26px; width: 100%; }
+        
+        .menu-group { 
+            display: flex; flex-direction: column; align-items: center; 
+            gap: 12px; width: 100%; max-width: 280px; 
         }
         
-        #order-selection { display: none; flex-direction: column; align-items: center; gap: 15px; }
+        .menu-btn {
+            width: 100%; padding: 16px; font-size: 18px; font-weight: bold;
+            cursor: pointer; border-radius: 15px; border: none;
+            background: #1976d2; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .menu-btn:active { transform: scale(0.98); }
+        .menu-btn.secondary { background: #4caf50; }
+        .menu-btn.outline { background: white; color: #555; border: 2px solid #ddd; box-shadow: none; }
+        
+        #order-selection { display: none; }
 
         /* ゲーム画面 */
         #game-screen { display: none; flex-direction: column; align-items: center; width: 100%; }
@@ -91,15 +91,17 @@
     <div id="menu-screen">
         <div id="level-selection" class="menu-group">
             <h1>スーパーまるばつ</h1>
-            <p style="text-align: center; font-weight: bold;">難易度を選択</p>
+            <p style="font-weight: bold; color: #666;">難易度を選択</p>
             <button class="menu-btn" onclick="selectLevel('Easy')" style="background: #81c784;">初級</button>
             <button class="menu-btn" onclick="selectLevel('Normal')" style="background: #4caf50;">中級</button>
             <button class="menu-btn" onclick="selectLevel('Hard')" style="background: #2e7d32;">上級</button>
-            <button class="menu-btn secondary" style="margin-top:10px" onclick="startGame('PvP')">二人で対戦</button>
+            <div style="height: 10px;"></div>
+            <button class="menu-btn secondary" onclick="startGame('PvP')">二人で対戦</button>
         </div>
 
         <div id="order-selection" class="menu-group">
             <h1>順番を選択</h1>
+            <p style="font-weight: bold; color: #666;">あなたはどちら？</p>
             <button class="menu-btn" onclick="setOrder('O')">先攻 (◯)</button>
             <button class="menu-btn secondary" onclick="setOrder('X')">後攻 (×)</button>
             <button class="menu-btn outline" onclick="cancelOrder()">戻る</button>
@@ -119,7 +121,7 @@
         const WIN_PATTERNS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
         let smallBoards, bigBoard, currentPlayer, activeBigBoardIndex, gameOver, gameMode, aiLevel, userSymbol;
 
-        // メニュー操作
+        // メニュー画面の制御
         function selectLevel(level) {
             aiLevel = level;
             gameMode = 'PvE';
@@ -141,7 +143,7 @@
 
         function startGame(mode) {
             gameMode = mode;
-            userSymbol = 'O'; // 対人戦はP1が先攻
+            userSymbol = 'O';
             document.getElementById('menu-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'flex';
             initGame();
@@ -154,7 +156,7 @@
             document.getElementById('game-screen').style.display = 'none';
         }
 
-        // ゲームロジック
+        // ゲーム本体のロジック
         function initGame() {
             smallBoards = Array(9).fill(null).map(() => Array(9).fill(null));
             bigBoard = Array(9).fill(null);
@@ -164,7 +166,6 @@
             renderBoard();
             updateStatus();
 
-            // AIが先攻(O)の場合、即座に打たせる
             if (gameMode === 'PvE' && userSymbol === 'X' && currentPlayer === 'O') {
                 setTimeout(aiSmartMove, 600);
             }
@@ -199,8 +200,6 @@
         function handleMove(bigIndex, smallIndex) {
             if (gameOver || bigBoard[bigIndex] !== null || smallBoards[bigIndex][smallIndex] !== null) return;
             if (activeBigBoardIndex !== -1 && activeBigBoardIndex !== bigIndex) return;
-            
-            // 自分の番かチェック
             if (gameMode === 'PvE' && currentPlayer !== userSymbol) return;
 
             executeMove(bigIndex, smallIndex);
@@ -256,19 +255,15 @@
                 possibleMoves.sort((a, b) => b.score - a.score);
                 finalMove = possibleMoves[0];
             } else {
-                // Hard (2手読み)
                 let bestScore = -Infinity;
                 let bestMoves = [];
                 for (let move of possibleMoves) {
                     const originalSmall = [...smallBoards[move.bIdx]];
                     const originalBig = [...bigBoard];
                     const originalActive = activeBigBoardIndex;
-                    
                     virtualExecuteMove(move.bIdx, move.sIdx, aiSymbol);
                     const score = getSimulationScore(userSymbol, aiSymbol);
-                    
                     smallBoards[move.bIdx] = originalSmall; bigBoard = originalBig; activeBigBoardIndex = originalActive;
-                    
                     if (score > bestScore) { bestScore = score; bestMoves = [move]; }
                     else if (score === bestScore) { bestMoves.push(move); }
                 }
